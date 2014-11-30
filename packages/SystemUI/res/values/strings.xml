@@ -1144,4 +1144,7 @@
     <!-- Hotspot dialog message -->
     <string name="hotspot_apm_message">Unable to connect to mobile networks while Airplane mode is enabled. Disable Airplane mode and try again.</string>
 
+    <!-- Content description of the data connection type HSPA+ for accessibility (not shown on the screen). [CHAR LIMIT=NONE] -->
+    <string name="accessibility_data_connection_hspap">HSPA+</string>
+
 </resources>
