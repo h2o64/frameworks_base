@@ -38,6 +38,7 @@ import android.util.Log;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.telephony.CarrierAppUtils;
 import com.android.internal.telephony.TelephonyIntents;
 import com.android.internal.telephony.cdma.EriInfo;
 import com.android.systemui.R;
@@ -87,8 +88,10 @@ public class MobileSignalController extends SignalController<
     private final int STATUS_BAR_STYLE_CDMA_1X_COMBINED = 1;
     private final int STATUS_BAR_STYLE_DEFAULT_DATA = 2;
     private final int STATUS_BAR_STYLE_DATA_VOICE = 3;
+    private final int STATUS_BAR_STYLE_EXTENDED = 4;
     private int mStyle = STATUS_BAR_STYLE_ANDROID_DEFAULT;
     private DataEnabledSettingObserver mDataEnabledSettingObserver;
+    CarrierAppUtils.CARRIER carrier = CarrierAppUtils.getCarrierId();
 
     // TODO: Reduce number of vars passed in, if we have the NetworkController, probably don't
     // need listener lists anymore.
@@ -124,7 +127,12 @@ public class MobileSignalController extends SignalController<
             mapIconSets();
         }
 
-        mStyle = context.getResources().getInteger(R.integer.status_bar_style);
+        if (carrier != null && (CarrierAppUtils.CARRIER.TELEPHONY_CARRIER_ONE
+                 == carrier)) {
+            mStyle = context.getResources().getInteger(R.integer.status_bar_style_extended);
+        } else {
+            mStyle = context.getResources().getInteger(R.integer.status_bar_style);
+        }
 
         String networkName = info.getCarrierName() != null ? info.getCarrierName().toString()
                 : mNetworkNameDefault;
@@ -288,8 +296,13 @@ public class MobileSignalController extends SignalController<
         String dataContentDescription = getStringIfExists(icons.mDataContentDescription);
 
         // Show icon in QS when we are connected or need to show roaming.
-        boolean showDataIcon = mCurrentState.dataConnected
-                || mCurrentState.iconGroup == TelephonyIcons.ROAMING;
+        boolean showDataIcon = false;
+        if (mContext.getResources().getBoolean(R.bool.show_roaming_and_network_icons)) {
+            showDataIcon = mCurrentState.dataConnected;
+        } else {
+            showDataIcon = mCurrentState.dataConnected
+                    || mCurrentState.iconGroup == TelephonyIcons.ROAMING;
+        }
         IconState statusIcon = new IconState(mCurrentState.enabled && !mCurrentState.airplaneMode,
                 getCurrentIconId(), contentDescription);
 
@@ -309,9 +322,12 @@ public class MobileSignalController extends SignalController<
         boolean activityOut = mCurrentState.dataConnected
                         && !mCurrentState.carrierNetworkChangeMode
                         && mCurrentState.activityOut;
-        showDataIcon &= mCurrentState.isDefault
-                || mCurrentState.iconGroup == TelephonyIcons.ROAMING;
-        showDataIcon &= mStyle == STATUS_BAR_STYLE_ANDROID_DEFAULT;
+        if (!mContext.getResources().getBoolean(R.bool.show_roaming_and_network_icons)) {
+            showDataIcon &= mCurrentState.isDefault
+                    || mCurrentState.iconGroup == TelephonyIcons.ROAMING;
+        }
+        showDataIcon &= (mStyle == STATUS_BAR_STYLE_ANDROID_DEFAULT
+                || mStyle == STATUS_BAR_STYLE_EXTENDED);
         int typeIcon = showDataIcon ? icons.mDataType : 0;
         int dataActivityId = showMobileActivity() ? 0 : icons.mActivityId;
         int mobileActivityId = showMobileActivity() ? icons.mActivityId : 0;
@@ -319,7 +335,8 @@ public class MobileSignalController extends SignalController<
                 activityIn, activityOut, dataActivityId, mobileActivityId,
                 icons.mStackedDataIcon, icons.mStackedVoiceIcon,
                 dataContentDescription, description, icons.mIsWide,
-                mSubscriptionInfo.getSubscriptionId());
+                mSubscriptionInfo.getSubscriptionId(), getImsIconId(),
+                isImsRegisteredInAirplaneMode(), getdataNetworkTypeInRoamingId());
 
         mCallbackHandler.post(new Runnable() {
             @Override
@@ -327,6 +344,41 @@ public class MobileSignalController extends SignalController<
                 mNetworkController.updateNetworkLabelView();
             }
         });
+    }
+
+    private boolean isImsRegisteredInAirplaneMode() {
+        return mStyle == STATUS_BAR_STYLE_EXTENDED
+                && mPhone != null && mPhone.isImsRegistered()
+                && mCurrentState.airplaneMode;
+    }
+
+    private int getImsIconId() {
+        if (mStyle == STATUS_BAR_STYLE_EXTENDED
+                && isImsRegisteredOnDataSim()) {
+            return R.drawable.ims_services_hd;
+        } else {
+            return 0;
+        }
+    }
+
+    private int getdataNetworkTypeInRoamingId() {
+        if (mStyle == STATUS_BAR_STYLE_EXTENDED && isRoaming()) {
+            int dataType = getDataNetworkType();
+            if (dataType == TelephonyManager.NETWORK_TYPE_LTE) {
+                return R.drawable.stat_sys_data_fully_connected_lte_networktype_in_roam;
+            } else if (dataType == TelephonyManager.NETWORK_TYPE_LTE_CA) {
+                return R.drawable.stat_sys_data_fully_connected_lte_plus_networktype_in_roam;
+            } else {
+                return 0;
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    private boolean isImsRegisteredOnDataSim() {
+        return mPhone != null && mPhone.isImsRegistered()
+                && mCurrentState.dataSim;
     }
 
     @Override
@@ -560,9 +612,7 @@ public class MobileSignalController extends SignalController<
         if (isCarrierNetworkChangeActive()) {
             mCurrentState.iconGroup = TelephonyIcons.CARRIER_NETWORK_CHANGE;
         } else if (isRoaming()) {
-            if (!mContext.getResources().getBoolean(R.bool.show_roaming_and_network_icons)) {
-                mCurrentState.iconGroup = TelephonyIcons.ROAMING;
-            }
+            mCurrentState.iconGroup = TelephonyIcons.ROAMING;
         }
         if (isEmergencyOnly() != mCurrentState.isEmergency) {
             mCurrentState.isEmergency = isEmergencyOnly();
@@ -589,7 +639,6 @@ public class MobileSignalController extends SignalController<
         final boolean roaming = isRoaming();
         final int voiceType = getVoiceNetworkType();
         final int dataType =  getDataNetworkType();
-
         int[][] sbIcons = TelephonyIcons.TELEPHONY_SIGNAL_STRENGTH;
         int[][] qsIcons = TelephonyIcons.QS_TELEPHONY_SIGNAL_STRENGTH;
         int[] contentDesc = AccessibilityContentDescriptions.PHONE_SIGNAL_STRENGTH;
@@ -676,7 +725,8 @@ public class MobileSignalController extends SignalController<
             dataContentDesc = TelephonyIcons.getDataTypeDesc(slotId);
             qsDataTypeIcon = TelephonyIcons.getQSDataTypeIcon(slotId);
         }
-        if (roaming) {
+        if (roaming && !mContext.getResources().getBoolean(
+                    R.bool.show_roaming_and_network_icons)) {
             dataTypeIcon = TelephonyIcons.ROAMING_ICON;
             qsDataTypeIcon = TelephonyIcons.QS_DATA_R;
         }
@@ -721,7 +771,8 @@ public class MobileSignalController extends SignalController<
 
     private boolean showMobileActivity() {
         return (mStyle == STATUS_BAR_STYLE_DEFAULT_DATA)
-                || (mStyle == STATUS_BAR_STYLE_ANDROID_DEFAULT);
+                || (mStyle == STATUS_BAR_STYLE_ANDROID_DEFAULT)
+                || (mStyle == STATUS_BAR_STYLE_EXTENDED);
     }
 
     private int getVoiceNetworkType() {
