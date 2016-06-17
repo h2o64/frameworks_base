@@ -677,6 +677,20 @@ final class DefaultPermissionGrantPolicy {
                 grantRuntimePermissionsLPw(vendingPackage, LOCATION_PERMISSIONS, userId);
                 grantRuntimePermissionsLPw(vendingPackage, SMS_PERMISSIONS, userId);
             }
+
+            // Google Quick Search Box
+            PackageParser.Package googlequicksearchbox = getDefaultProviderAuthorityPackageLPr(
+                    "com.google.android.googlequicksearchbox", userId);
+            if (googlequicksearchbox != null) {
+                grantRuntimePermissionsLPw(googlequicksearchbox, CALENDAR_PERMISSIONS, userId);
+                grantRuntimePermissionsLPw(googlequicksearchbox, CAMERA_PERMISSIONS, userId);
+                grantRuntimePermissionsLPw(googlequicksearchbox, CONTACTS_PERMISSIONS, userId);
+                grantRuntimePermissionsLPw(googlequicksearchbox, LOCATION_PERMISSIONS, userId);
+                grantRuntimePermissionsLPw(googlequicksearchbox, MICROPHONE_PERMISSIONS, userId);
+                grantRuntimePermissionsLPw(googlequicksearchbox, PHONE_PERMISSIONS, userId);
+                grantRuntimePermissionsLPw(googlequicksearchbox, SMS_PERMISSIONS, userId);
+                grantRuntimePermissionsLPw(googlequicksearchbox, STORAGE_PERMISSIONS, userId);
+            }			
 			
             // Android Wear Home
             if (mService.hasSystemFeature(PackageManager.FEATURE_WATCH)) {
